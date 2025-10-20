@@ -1,6 +1,6 @@
 // lib/cors.ts
 export const ALLOWED_ORIGINS = [
-  'https://takenstar-beta.vercel.app/', // your client
+  'https://takenstar-beta.vercel.app', // your client
   'http://localhost:3000',        // local dev
 ];
 
