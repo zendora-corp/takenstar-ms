@@ -56,21 +56,21 @@ export default function ToppersPage() {
               <EmojiEvents sx={{ fontSize: 40, color: medalColors[index] }} />
             )}
             <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main' }}>
-              {topper.registrations?.full_name?.charAt(0) || 'T'}
+              {topper.registrations?.fullName?.charAt(0) || 'T'}
             </Avatar>
             <Box flex={1}>
               <Typography variant="h6">
-                #{index + 1} {topper.registrations?.full_name}
+                #{index + 1} {topper.registrations?.fullName}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {topper.registrations?.schools?.name}
               </Typography>
               <Typography variant="body2">
-                Class {topper.registrations?.class}-{topper.registrations?.group_type}
+                Class {topper.registrations?.class}-{topper.registrations?.groupType}
               </Typography>
             </Box>
             <Box textAlign="right">
-              <Typography variant="h5">{topper.total_marks}</Typography>
+              <Typography variant="h5">{topper.total}</Typography>
               <Typography variant="body2" color="text.secondary">
                 {topper.percentage?.toFixed(2)}%
               </Typography>
