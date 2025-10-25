@@ -77,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { text: 'Exam Years', icon: <CalendarIcon />, href: '/dashboard/exam-years' },
     { text: 'Contacts', icon: <ContactIcon />, href: '/dashboard/contacts' },
     { text: 'Toppers', icon: <TrophyIcon />, href: '/dashboard/toppers' },
-    // { text: 'Users', icon: <PersonAddIcon />, href: '/dashboard/users', adminOnly: true },
+    { text: 'Users', icon: <PersonAddIcon />, href: '/dashboard/users', adminOnly: true },
     // { text: 'Import/Export', icon: <UploadIcon />, href: '/dashboard/import-export', adminOnly: true },
   ];
 
