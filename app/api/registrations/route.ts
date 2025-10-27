@@ -33,12 +33,12 @@ export async function GET(req: NextRequest) {
         exam_years(year)
       `, { count: 'exact' });
 
-    if (examYearId) query = query.eq('exam_year_id', examYearId);
-    if (districtId) query = query.eq('district_id', districtId);
-    if (schoolId) query = query.eq('school_id', schoolId);
+    if (examYearId) query = query.eq('examYearId', examYearId);
+    if (districtId) query = query.eq('districtId', districtId);
+    if (schoolId) query = query.eq('schoolId', schoolId);
     if (classNum) query = query.eq('class', parseInt(classNum));
-    if (group) query = query.eq('group_type', group);
-    if (q) query = query.or(`full_name.ilike.%${q}%,school_roll_no.ilike.%${q}%`);
+    if (group) query = query.eq('groupType', group);
+    if (q) query = query.or(`fullName.ilike.%${q}%,schoolRollNo.ilike.%${q}%`);
 
     const { data, error, count } = await query
       .order('createdAt', { ascending: false })

@@ -75,7 +75,7 @@ export type Database = {
           exam_year_id: string;
           full_name: string;
           gender: 'Male' | 'Female' | 'Other';
-          dob: string;
+          dob: string | null;
           class: number;
           group_type: 'A' | 'B';
           medium: 'Assamese' | 'English';
@@ -85,7 +85,7 @@ export type Database = {
           area_or_district_name: string;
           address: string;
           student_mobile: string;
-          guardian_mobile: string;
+          guardian_mobile: string | null;
           email: string | null;
           payment_option: 'Online' | 'Offline';
           payment_status: 'Pending' | 'Verified' | 'Rejected';

@@ -6,7 +6,7 @@ export const registrationSchema = z.object({
   examYearId: z.number().int(), // ✅ Changed
   fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
   gender: z.enum(['Male', 'Female', 'Other']),
-  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').nullable().optional(),
   class: z.number().int().min(6).max(12),
   medium: z.enum(['Assamese', 'English']),
   districtId: z.number().int(), // ✅ Changed
@@ -14,7 +14,7 @@ export const registrationSchema = z.object({
   schoolRollNo: z.string().min(1, 'School roll number is required').max(50),
   address: z.string().min(5, 'Address is required').max(500),
   studentMobile: z.string().regex(phoneRegex, 'Invalid Indian mobile number'),
-  guardianMobile: z.string().regex(phoneRegex, 'Invalid Indian mobile number'),
+  guardianMobile: z.string().regex(phoneRegex, 'Invalid Indian mobile number').nullable().optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   paymentOption: z.enum(['Online', 'Offline']),
   transactionId: z.string().optional(),
