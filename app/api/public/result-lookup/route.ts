@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       .from('schools')
       .select('id, name, medium')
       .ilike('name', schoolName)
-      .eq('district_id', district.id)
+      .eq('districtId', district.id)
       .eq('status', 'active')
       .maybeSingle();
 

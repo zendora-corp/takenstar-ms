@@ -20,11 +20,12 @@ import { Add } from '@mui/icons-material';
 import { useSession } from 'next-auth/react';
 import { useQueryState } from '@/hooks/useQueryState';
 import { useFetch } from '@/hooks/useFetch';
-import DataGridToolbar from '@/components/common/DataGridToolbar';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { arrayToCSV, downloadCSV } from '@/lib/csv';
 import { fetcher } from '@/lib/fetcher';
 import dayjs from 'dayjs';
+
+type SearchBy = 'name' | 'area' | 'district';
 
 export default function SchoolsPage() {
   const { data: session } = useSession();
@@ -33,39 +34,116 @@ export default function SchoolsPage() {
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [search, setSearch] = useState(getQueryParam('q'));
-  const [districtFilter, setDistrictFilter] = useState(getQueryParam('districtId'));
 
+  // Search UI state
+  const initialQ = (getQueryParam('q') as string) || '';
+  const initialBy = (getQueryParam('searchBy') as SearchBy) || 'name';
+  const [searchBy, setSearchBy] = useState<SearchBy>(initialBy);
+  const [search, setSearch] = useState(initialQ);          // actual applied q
+  const [searchInput, setSearchInput] = useState(initialQ); // text field
+
+  // District mapping + applied district filter (ID)
+  const { data: districtsResp } = useFetch('/api/districts');
+  const districts: Array<{ id: string; name: string }> = districtsResp?.data || [];
+  const [districtIdFilter, setDistrictIdFilter] = useState<string>('');
+
+  // Drawer / form
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
     districtId: '',
-    address: '',
+    address: '', // UI shows "Area"; keeping key until backend changes
     medium: 'Both',
     status: 'active',
   });
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: '' });
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as any });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as any,
+  });
 
+  // Build query string — uses either q or districtIdFilter
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
-    if (districtFilter) params.set('districtId', districtFilter);
-    if (search) params.set('q', search);
+
+    if (districtIdFilter) {
+      params.set('districtId', districtIdFilter);
+      params.set('searchBy', 'district');
+    } else if (search) {
+      params.set('q', search);
+      params.set('searchBy', searchBy);
+      if (searchBy === 'area') {
+        // back-compat if API still accepts address text filter
+        params.set('address', search);
+      }
+    }
+
     params.set('page', String(page + 1));
     params.set('limit', String(pageSize));
     return params.toString();
-  }, [districtFilter, search, page, pageSize]);
+  }, [districtIdFilter, search, searchBy, page, pageSize]);
 
   const { data, error, mutate } = useFetch(`/api/schools?${queryString}`);
-  const { data: districts } = useFetch('/api/districts');
 
+  // ---------- Search apply logic ----------
+  const resolveDistrictId = (term: string): { id: string | ''; reason?: string } => {
+    if (!districts?.length) return { id: '', reason: 'loading' };
+
+    const s = term.trim().toLowerCase();
+    if (!s) return { id: '', reason: 'empty' };
+
+    const exact = districts.find(d => d.name.trim().toLowerCase() === s);
+    if (exact) return { id: exact.id };
+
+    const partials = districts.filter(d => d.name.toLowerCase().includes(s));
+    if (partials.length === 1) return { id: partials[0].id };
+    if (partials.length === 0) return { id: '', reason: 'no_match' };
+    return { id: '', reason: 'ambiguous' };
+  };
+
+  const applySearch = () => {
+    // District search: map to ID and use districtIdFilter only
+    if (searchBy === 'district') {
+      const { id, reason } = resolveDistrictId(searchInput);
+      if (!id) {
+        let message = 'Unable to resolve district.';
+        if (reason === 'loading') message = 'District list is still loading. Please try again.';
+        if (reason === 'no_match') message = 'No district matched your input.';
+        if (reason === 'ambiguous') message = 'Multiple districts matched. Please type a more specific name.';
+        if (reason === 'empty') message = 'Please type a district name.';
+
+        setSnackbar({ open: true, message, severity: 'error' });
+        return;
+      }
+      setDistrictIdFilter(id);
+      setSearch(''); // ensure q is not sent
+      setPage(0);
+      return;
+    }
+
+    // Name / Area: clear district filter and set q
+    setDistrictIdFilter('');
+    setSearch(searchInput.trim());
+    setPage(0);
+  };
+
+  const clearAll = () => {
+    setSearch('');
+    setSearchInput('');
+    setSearchBy('name');
+    setDistrictIdFilter('');
+    setPage(0);
+    clearQueryParams();
+  };
+
+  // ---------- CRUD + UI handlers ----------
   const handleOpenDrawer = (school?: any) => {
     if (school) {
       setEditingSchool(school);
-      console.log(school)
       setFormData({
         name: school.name,
         districtId: school.districtId,
@@ -96,13 +174,16 @@ export default function SchoolsPage() {
     try {
       const url = editingSchool ? `/api/schools/${editingSchool.id}` : '/api/schools';
       const method = editingSchool ? 'PATCH' : 'POST';
-
       await fetcher(url, {
         method,
         body: JSON.stringify(formData),
       });
 
-      setSnackbar({ open: true, message: `School ${editingSchool ? 'updated' : 'created'} successfully`, severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: `School ${editingSchool ? 'updated' : 'created'} successfully`,
+        severity: 'success',
+      });
       setDrawerOpen(false);
       mutate();
     } catch (err: any) {
@@ -129,7 +210,7 @@ export default function SchoolsPage() {
     const csvData = data.data.map((school: any) => ({
       Name: school.name,
       District: school.districts?.name || '',
-      Address: school.address || '',
+      Area: school.address || '',
       Medium: school.medium,
       Status: school.status,
       CreatedAt: dayjs(school.created_at).format('YYYY-MM-DD'),
@@ -139,9 +220,6 @@ export default function SchoolsPage() {
     downloadCSV(csv, `schools_${dayjs().format('YYYY-MM-DD')}.csv`);
   };
 
-  const filters: Array<{ label: string; value: string }> = [];
-  if (districtFilter) filters.push({ label: 'District', value: districts?.data?.find((d: any) => d.id === districtFilter)?.name || districtFilter });
-
   const columns: GridColDef[] = [
     { field: 'name', headerName: 'Name', width: 250 },
     {
@@ -150,13 +228,13 @@ export default function SchoolsPage() {
       width: 180,
       valueGetter: (value, row) => row.districts?.name || '',
     },
-    { field: 'address', headerName: 'Address', width: 250 },
+    { field: 'address', headerName: 'Area', width: 250, valueGetter: (v, r) => r.address || '' },
     { field: 'medium', headerName: 'Medium', width: 120 },
     {
       field: 'status',
       headerName: 'Status',
       width: 100,
-      valueGetter: (value, row) => row.status === 'active' ? 'Active' : 'Inactive',
+      valueGetter: (value, row) => (row.status === 'active' ? 'Active' : 'Inactive'),
     },
     {
       field: 'created_at',
@@ -191,6 +269,7 @@ export default function SchoolsPage() {
 
   return (
     <Box>
+      {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h4">Schools Management</Typography>
         <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDrawer()}>
@@ -198,18 +277,52 @@ export default function SchoolsPage() {
         </Button>
       </Box>
 
-      <Box sx={{ mb: 2 }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>District</InputLabel>
-          <Select value={districtFilter} label="District" onChange={(e) => setDistrictFilter(e.target.value)}>
-            <MenuItem value="">All</MenuItem>
-            {districts?.data?.map((district: any) => (
-              <MenuItem key={district.id} value={district.id}>{district.name}</MenuItem>
-            ))}
+      {/* Single Search + "Search by" selector */}
+      <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Search by</InputLabel>
+          <Select
+            value={searchBy}
+            label="Search by"
+            onChange={(e) => setSearchBy(e.target.value as SearchBy)}
+          >
+            <MenuItem value="name">Name</MenuItem>
+            <MenuItem value="area">Area</MenuItem>
+            <MenuItem value="district">District</MenuItem>
           </Select>
         </FormControl>
+
+        <TextField
+          size="small"
+          placeholder={
+            searchBy === 'name'
+              ? 'Search by school name…'
+              : searchBy === 'area'
+              ? 'Search by area…'
+              : 'Type district name…'
+          }
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') applySearch();
+          }}
+          sx={{ minWidth: 300 }}
+        />
+
+        <Button variant="contained" onClick={applySearch}>
+          Search
+        </Button>
+        <Button variant="text" onClick={clearAll}>
+          Clear
+        </Button>
+
+        <Box sx={{ flexGrow: 1 }} />
+        <Button variant="outlined" onClick={handleExport}>
+          Export CSV
+        </Button>
       </Box>
 
+      {/* Grid */}
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
           rows={data?.data || []}
@@ -223,22 +336,11 @@ export default function SchoolsPage() {
             setPage(model.page);
             setPageSize(model.pageSize);
           }}
-          slots={{
-            toolbar: () => (
-              <DataGridToolbar
-                searchValue={search}
-                onSearchChange={setSearch}
-                filters={filters}
-                onClearFilters={clearQueryParams}
-                onExport={handleExport}
-                searchPlaceholder="Search schools..."
-              />
-            ),
-          }}
           disableRowSelectionOnClick
         />
       </Box>
 
+      {/* Create/Edit Drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" gutterBottom>
@@ -259,17 +361,18 @@ export default function SchoolsPage() {
                 label="District"
                 onChange={(e) => setFormData({ ...formData, districtId: e.target.value })}
               >
-                {districts?.data?.map((district: any) => (
-                  <MenuItem key={district.id} value={district.id}>{district.name}</MenuItem>
+                {districts.map((d) => (
+                  <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
+            {/* Area (formerly Address) */}
             <TextField
-              label="Address"
+              label="Area"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               multiline
-              rows={3}
+              rows={2}
               fullWidth
             />
             <FormControl fullWidth>
@@ -307,6 +410,7 @@ export default function SchoolsPage() {
         </Box>
       </Drawer>
 
+      {/* Delete dialog */}
       <ConfirmDialog
         open={deleteDialog.open}
         title="Delete School"
@@ -317,7 +421,12 @@ export default function SchoolsPage() {
         confirmText="Delete"
       />
 
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+      {/* Snackbars */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>

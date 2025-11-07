@@ -20,7 +20,7 @@ export async function GET(
       .from('registrations')
       .select(`
         *,
-        schools(name, district_id, districts(name)),
+        schools(name, districtId, districts(name)),
         exam_years(year)
       `)
       .eq('id', params.id)

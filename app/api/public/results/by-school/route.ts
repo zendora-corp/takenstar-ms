@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
         .select(`
           id,
           name,
-          district_id,
+          districtId,
           medium,
           districts!inner(id, name)
         `)
@@ -107,9 +107,9 @@ export async function GET(req: NextRequest) {
 
       const { data: schoolData, error: schoolError } = await supabaseAdmin
         .from('schools')
-        .select('id, name, district_id, medium')
+        .select('id, name, districtId, medium')
         .ilike('name', schoolName!)
-        .eq('district_id', district.id)
+        .eq('districtId', district.id)
         .eq('status', 'active')
         .maybeSingle();
 

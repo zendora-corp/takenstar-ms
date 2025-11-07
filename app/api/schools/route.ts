@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       .select('*, districts(name)', { count: 'exact' });
 
     if (districtId) {
-      query = query.eq('district_id', districtId);
+      query = query.eq('districtId', districtId);
     }
 
     if (q) {

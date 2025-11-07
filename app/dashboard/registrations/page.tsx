@@ -24,7 +24,6 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useSession } from 'next-auth/react';
 import { useQueryState } from '@/hooks/useQueryState';
 import { useFetch } from '@/hooks/useFetch';
-import DataGridToolbar from '@/components/common/DataGridToolbar';
 import { arrayToCSV, downloadCSV } from '@/lib/csv';
 import { fetcher } from '@/lib/fetcher';
 import dayjs from 'dayjs';
@@ -35,7 +34,11 @@ export default function RegistrationsPage() {
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
+
+  // original "search" drives the query; "searchInput" is the text field
   const [search, setSearch] = useState(getQueryParam('q'));
+  const [searchInput, setSearchInput] = useState(search || '');
+
   const [examYearFilter, setExamYearFilter] = useState(getQueryParam('examYear'));
   const [districtFilter, setDistrictFilter] = useState(getQueryParam('districtId'));
   const [schoolFilter, setSchoolFilter] = useState(getQueryParam('schoolId'));
@@ -72,6 +75,27 @@ export default function RegistrationsPage() {
   const { data: examYears } = useFetch('/api/exam-years');
   const { data: districts } = useFetch('/api/public/refs/districts');
   const { data: schools } = useFetch(districtFilter ? `/api/public/refs/schools?districtId=${districtFilter}` : null);
+
+  const applySearch = () => {
+    setSearch(searchInput.trim());
+    setPage(0);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearch('');
+    setPage(0);
+  };
+
+  const handleClearFilters = () => {
+    setExamYearFilter('');
+    setDistrictFilter('');
+    setSchoolFilter('');
+    setClassFilter('');
+    setGroupFilter('');
+    clearQueryParams();
+    setPage(0);
+  };
 
   const handlePaymentUpdate = async () => {
     if (!selectedReg) return;
@@ -145,8 +169,13 @@ export default function RegistrationsPage() {
       headerName: 'Payment',
       width: 120,
       renderCell: (params) => {
-        const color = params.value === 'Verified' ? 'success' : params.value === 'Rejected' ? 'error' : 'warning';
-        return <Chip label={params.value} color={color} size="small" />;
+        const color =
+          params.value === 'Verified'
+            ? 'success'
+            : params.value === 'Rejected'
+            ? 'error'
+            : 'warning';
+        return <Chip label={params.value} color={color as any} size="small" />;
       },
     },
     {
@@ -197,7 +226,8 @@ export default function RegistrationsPage() {
         Registrations
       </Typography>
 
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+      {/* Filters + Global Search */}
+      <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>Exam Year</InputLabel>
           <Select value={examYearFilter} label="Exam Year" onChange={(e) => setExamYearFilter(e.target.value)}>
@@ -210,7 +240,11 @@ export default function RegistrationsPage() {
 
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>District</InputLabel>
-          <Select value={districtFilter} label="District" onChange={(e) => { setDistrictFilter(e.target.value); setSchoolFilter(''); }}>
+          <Select
+            value={districtFilter}
+            label="District"
+            onChange={(e) => { setDistrictFilter(e.target.value); setSchoolFilter(''); }}
+          >
             <MenuItem value="">All</MenuItem>
             {districts?.data?.map((district: any) => (
               <MenuItem key={district.id} value={district.id}>{district.name}</MenuItem>
@@ -220,7 +254,12 @@ export default function RegistrationsPage() {
 
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel>School</InputLabel>
-          <Select value={schoolFilter} label="School" onChange={(e) => setSchoolFilter(e.target.value)} disabled={!districtFilter}>
+          <Select
+            value={schoolFilter}
+            label="School"
+            onChange={(e) => setSchoolFilter(e.target.value)}
+            disabled={!districtFilter}
+          >
             <MenuItem value="">All</MenuItem>
             {schools?.data?.map((school: any) => (
               <MenuItem key={school.id} value={school.id}>{school.name}</MenuItem>
@@ -246,7 +285,32 @@ export default function RegistrationsPage() {
             <MenuItem value="B">B</MenuItem>
           </Select>
         </FormControl>
+
+        {/* Global Search */}
+        <TextField
+          size="small"
+          placeholder="Search by name or roll number..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applySearch(); }}
+          sx={{ minWidth: 260 }}
+        />
+        <Button variant="contained" onClick={applySearch}>Search</Button>
+        <Button variant="outlined" onClick={handleClearSearch}>Clear</Button>
+
+        <Box sx={{ flexGrow: 1 }} />
+        <Button variant="outlined" onClick={handleExport}>Export CSV</Button>
+        <Button variant="text" onClick={handleClearFilters}>Clear Filters</Button>
       </Box>
+
+      {/* Active filter chips (optional) */}
+      {filters.length > 0 && (
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+          {filters.map((f) => (
+            <Chip key={`${f.label}-${f.value}`} size="small" label={`${f.label}: ${f.value}`} />
+          ))}
+        </Stack>
+      )}
 
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
@@ -260,18 +324,6 @@ export default function RegistrationsPage() {
           onPaginationModelChange={(model) => {
             setPage(model.page);
             setPageSize(model.pageSize);
-          }}
-          slots={{
-            toolbar: () => (
-              <DataGridToolbar
-                searchValue={search}
-                onSearchChange={setSearch}
-                filters={filters}
-                onClearFilters={clearQueryParams}
-                onExport={handleExport}
-                searchPlaceholder="Search by name or roll number..."
-              />
-            ),
           }}
           disableRowSelectionOnClick
         />
@@ -328,7 +380,11 @@ export default function RegistrationsPage() {
         </Box>
       </Drawer>
 
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
